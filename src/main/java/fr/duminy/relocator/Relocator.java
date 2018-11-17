@@ -4,14 +4,11 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.PackageDeclaration;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.Writer;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
 import static com.github.javaparser.JavaParser.parse;
-import static fr.duminy.relocator.FileCollector.collectFiles;
 import static java.nio.file.Files.createDirectories;
 import static java.nio.file.Files.newBufferedWriter;
 import static java.nio.file.Paths.get;
@@ -20,10 +17,17 @@ import static java.nio.file.StandardOpenOption.CREATE;
 @SuppressWarnings("unused")
 public class Relocator {
     private final Path sourceDirectory;
-    private final FileRelocator fileRelocator = new FileRelocator();
+    private final FileRelocator fileRelocator;
+    private final FileCollector fileCollector;
 
     public Relocator(Path sourceDirectory) {
+        this(sourceDirectory, new FileRelocator(), new FileCollector());
+    }
+
+    Relocator(Path sourceDirectory, FileRelocator fileRelocator, FileCollector fileCollector) {
         this.sourceDirectory = sourceDirectory;
+        this.fileRelocator = fileRelocator;
+        this.fileCollector = fileCollector;
     }
 
     public void addRelocation(Relocation relocation) {
@@ -32,10 +36,10 @@ public class Relocator {
 
     public void relocate(Path targetDirectory) throws IOException {
         createDirectories(targetDirectory);
-        collectFiles(sourceDirectory).forEach(file -> {
-            try (InputStream in = Files.newInputStream(file)) {
+        fileCollector.collectFiles(sourceDirectory).forEach(file -> {
+            try {
                 String fileName = file.getFileName().toString();
-                CompilationUnit compilationUnit = parse(in);
+                CompilationUnit compilationUnit = parse(file);
                 relocate(compilationUnit, fileName);
                 generateFile(compilationUnit, targetDirectory, fileName);
             } catch (IOException e) {
@@ -58,7 +62,7 @@ public class Relocator {
         String packageName = packageDeclaration.get().getNameAsString().replace(".", "/");
 
         Path parentOutput = targetDirectory.resolve(get(packageName));
-        Files.createDirectories(parentOutput);
+        createDirectories(parentOutput);
         Path output = parentOutput.resolve(fileName);
         try (Writer writer = newBufferedWriter(output, CREATE)) {
             writer.write(compilationUnit.toString());

@@ -11,24 +11,19 @@ import java.util.List;
 import static java.nio.file.FileVisitResult.CONTINUE;
 import static java.nio.file.Files.walkFileTree;
 
-public class FileCollector extends SimpleFileVisitor<Path> {
-    private final List<Path> files = new ArrayList<>();
-
-    public static List<Path> collectFiles(Path output) throws IOException {
-        FileCollector fileCollector = new FileCollector();
-        walkFileTree(output, fileCollector);
-        return fileCollector.getFiles();
-    }
-
-    @Override
-    public FileVisitResult visitFile(Path file, BasicFileAttributes attr) {
-        if (attr.isRegularFile() && file.getFileName().toString().endsWith(".java")) {
-            files.add(file.toAbsolutePath());
-        }
-        return CONTINUE;
-    }
-
-    public List<Path> getFiles() {
+@SuppressWarnings("WeakerAccess")
+public class FileCollector {
+    public List<Path> collectFiles(Path directory) throws IOException {
+        List<Path> files = new ArrayList<>();
+        walkFileTree(directory, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attr) {
+                if (attr.isRegularFile() && file.getFileName().toString().endsWith(".java")) {
+                    files.add(file.toAbsolutePath());
+                }
+                return CONTINUE;
+            }
+        });
         return files;
     }
 }
