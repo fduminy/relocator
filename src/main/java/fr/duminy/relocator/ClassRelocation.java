@@ -1,18 +1,24 @@
 package fr.duminy.relocator;
 
 @SuppressWarnings("WeakerAccess")
-public class PackageRelocation implements Relocation {
+public class ClassRelocation implements Relocation {
     private final String sourcePackage;
+    private final String sourceClass;
     private final String targetPackage;
 
-    public PackageRelocation(String sourcePackage, String targetPackage) {
+    public ClassRelocation(String sourcePackage, String sourceClass, String targetPackage) {
         this.sourcePackage = sourcePackage;
+        this.sourceClass = sourceClass;
         this.targetPackage = targetPackage;
     }
 
     @Override
     public String getSourcePackage() {
         return sourcePackage;
+    }
+
+    public String getSourceClass() {
+        return sourceClass;
     }
 
     @Override

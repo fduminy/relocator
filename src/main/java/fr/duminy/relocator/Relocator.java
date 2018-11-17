@@ -17,6 +17,7 @@ import static java.nio.file.Files.newBufferedWriter;
 import static java.nio.file.Paths.get;
 import static java.nio.file.StandardOpenOption.CREATE;
 
+@SuppressWarnings("unused")
 public class Relocator {
     private final Path sourceDirectory;
     private final FileRelocator fileRelocator = new FileRelocator();
@@ -25,8 +26,8 @@ public class Relocator {
         this.sourceDirectory = sourceDirectory;
     }
 
-    public void addRelocation(PackageRelocation packageRelocation) {
-        fileRelocator.addRelocation(packageRelocation);
+    public void addRelocation(Relocation relocation) {
+        fileRelocator.addRelocation(relocation);
     }
 
     public void relocate(Path targetDirectory) throws IOException {
