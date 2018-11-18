@@ -1,18 +1,20 @@
 package fr.duminy.relocator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.comments.LineComment;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Objects;
 
 import static java.nio.file.Files.*;
-import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
@@ -34,30 +36,52 @@ class RelocatorTest {
     }
 
     @Test
-    void relocate() throws IOException {
+    void relocate_modifies_files() throws IOException {
+        relocate(true);
+    }
+
+    @Test
+    void relocate_does_not_modify_file() throws IOException {
+        relocate(false);
+    }
+
+    private void relocate(boolean modifyFile) throws IOException {
         Path sourceDirectory = createTempDirectory("");
-        Path file1 = createClassFile(sourceDirectory, "Class1");
-        Path file2 = createClassFile(sourceDirectory, "Class2");
-        when(fileCollector.collectFiles(sourceDirectory)).thenReturn(asList(file1, file2));
+        StringBuilder fileContent = new StringBuilder();
+        Path file = createClassFile(sourceDirectory, "Class1", fileContent);
+        when(fileCollector.collectFiles(sourceDirectory)).thenReturn(singletonList(file));
+        if (modifyFile) {
+            doAnswer(modifyCompilationUnit("modification", fileContent)).when(fileRelocator)
+                                                                        .relocate(argThat(eqCompilationUnitFor(file)));
+        }
         Relocator relocator = new Relocator(sourceDirectory, fileRelocator, fileCollector);
         relocator.addRelocation(relocation);
 
         relocator.relocate();
 
         verify(fileRelocator).addRelocation(relocation);
-        verify(fileRelocator).relocate(argThat(eqCompilationUnitFor(file1)));
-        verify(fileRelocator).relocate(argThat(eqCompilationUnitFor(file2)));
+        verify(fileRelocator).relocate(argThat(eqCompilationUnitFor(file)));
         verifyNoMoreInteractions(fileRelocator, fileCollector, relocation);
         Path targetPackage = sourceDirectory.resolve("package1");
-        assertThat(targetPackage.resolve(file1.getFileName().toString())).hasSameContentAs(file1);
-        assertThat(targetPackage.resolve(file2.getFileName().toString())).hasSameContentAs(file2);
+        assertThat(targetPackage.resolve(file.getFileName().toString())).hasContent(fileContent.toString());
     }
 
-    private Path createClassFile(Path sourceDirectory, String className) throws IOException {
+    private Answer<Void> modifyCompilationUnit(String modification, StringBuilder fileContent) {
+        return invocationOnMock -> {
+            CompilationUnit compilationUnit = invocationOnMock.getArgument(0);
+            compilationUnit.addOrphanComment(new LineComment(modification));
+            fileContent.append("\n").append("// ").append(modification);
+            return null;
+        };
+    }
+
+    private Path createClassFile(Path sourceDirectory, String className, StringBuilder fileContent) throws IOException {
         Path packageDirectory = sourceDirectory.resolve("package1");
         createDirectories(packageDirectory);
         Path file = createFile(packageDirectory.resolve(className + ".java"));
-        write(file, ("package package1;\n\npublic class " + className + " {\n}").getBytes());
+        String sourceCode = "package package1;\n\npublic class " + className + " {\n}";
+        fileContent.append(sourceCode);
+        write(file, sourceCode.getBytes());
         return file;
     }
 
