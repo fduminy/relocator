@@ -202,17 +202,15 @@ class FileRelocatorTest {
         }
     }
 
-    private void relocate(Relocation relocation, String source, Function<String, String> expectedResult)
+    private void relocate(Relocation relocation, String source, Function<String, String> expectedResultFunction)
         throws IOException {
         fileRelocator.addRelocation(relocation);
-        relocate(source, expectedResult.apply(source));
-    }
-    
-    private void relocate(String source, String expectedResult) throws IOException {
         CompilationUnit compilationUnit = parse(writeFile(source));
-        fileRelocator.relocate(compilationUnit);
-        assertThat(normalize(compilationUnit.toString()))
-            .isEqualTo(normalize((expectedResult == null) ? source : expectedResult));
+
+        boolean modified = fileRelocator.relocate(compilationUnit);
+
+        assertThat(normalize(compilationUnit.toString())).isEqualTo(normalize(expectedResultFunction.apply(source)));
+        assertThat(modified).isEqualTo(expectedResultFunction != IDENTITY);
     }
 
     private Path writeFile(String source) throws IOException {

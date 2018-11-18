@@ -39,17 +39,18 @@ public class Relocator {
             try {
                 String fileName = file.getFileName().toString();
                 CompilationUnit compilationUnit = parse(file);
-                relocate(compilationUnit, fileName);
-                generateFile(compilationUnit, fileName);
+                if (relocate(compilationUnit, fileName)) {
+                    generateFile(compilationUnit, fileName);
+                }
             } catch (IOException e) {
                 throw new RelocatorException(e);
             }
         });
     }
 
-    private void relocate(CompilationUnit compilationUnit, String fileName) {
+    private boolean relocate(CompilationUnit compilationUnit, String fileName) {
         System.out.println("Relocating " + fileName);
-        fileRelocator.relocate(compilationUnit);
+        return fileRelocator.relocate(compilationUnit);
     }
 
     private void generateFile(CompilationUnit compilationUnit, String fileName)

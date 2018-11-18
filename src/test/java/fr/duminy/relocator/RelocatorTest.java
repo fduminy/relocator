@@ -11,8 +11,11 @@ import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.Objects;
 
+import static java.lang.Boolean.TRUE;
+import static java.lang.Thread.sleep;
 import static java.nio.file.Files.*;
 import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,23 +39,25 @@ class RelocatorTest {
     }
 
     @Test
-    void relocate_modifies_files() throws IOException {
+    void relocate_modifies_files() throws IOException, InterruptedException {
         relocate(true);
     }
 
     @Test
-    void relocate_does_not_modify_file() throws IOException {
+    void relocate_does_not_modify_file() throws IOException, InterruptedException {
         relocate(false);
     }
 
-    private void relocate(boolean modifyFile) throws IOException {
+    private void relocate(boolean modifyFile) throws IOException, InterruptedException {
         Path sourceDirectory = createTempDirectory("");
-        StringBuilder fileContent = new StringBuilder();
-        Path file = createClassFile(sourceDirectory, "Class1", fileContent);
+        StringBuilder expectedFileContent = new StringBuilder();
+        Path file = createClassFile(sourceDirectory, "Class1", expectedFileContent);
+        FileTime initialFileTime = getLastModifiedTime(file);
+        sleep(1000); // wait next second
         when(fileCollector.collectFiles(sourceDirectory)).thenReturn(singletonList(file));
         if (modifyFile) {
-            doAnswer(modifyCompilationUnit("modification", fileContent)).when(fileRelocator)
-                                                                        .relocate(argThat(eqCompilationUnitFor(file)));
+            when(fileRelocator.relocate(argThat(eqCompilationUnitFor(file))))
+                .then(modifyCompilationUnit("modification", expectedFileContent));
         }
         Relocator relocator = new Relocator(sourceDirectory, fileRelocator, fileCollector);
         relocator.addRelocation(relocation);
@@ -63,15 +68,20 @@ class RelocatorTest {
         verify(fileRelocator).relocate(argThat(eqCompilationUnitFor(file)));
         verifyNoMoreInteractions(fileRelocator, fileCollector, relocation);
         Path targetPackage = sourceDirectory.resolve("package1");
-        assertThat(targetPackage.resolve(file.getFileName().toString())).hasContent(fileContent.toString());
+        assertThat(targetPackage.resolve(file.getFileName().toString())).hasContent(expectedFileContent.toString());
+        if (modifyFile) {
+            assertThat(getLastModifiedTime(file)).isGreaterThan(initialFileTime);
+        } else {
+            assertThat(getLastModifiedTime(file)).isEqualTo(initialFileTime);
+        }
     }
 
-    private Answer<Void> modifyCompilationUnit(String modification, StringBuilder fileContent) {
+    private Answer<Boolean> modifyCompilationUnit(String modification, StringBuilder fileContent) {
         return invocationOnMock -> {
             CompilationUnit compilationUnit = invocationOnMock.getArgument(0);
             compilationUnit.addOrphanComment(new LineComment(modification));
             fileContent.append("\n").append("// ").append(modification);
-            return null;
+            return TRUE;
         };
     }
 

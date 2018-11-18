@@ -23,52 +23,54 @@ class FileRelocator {
         relocations.add(relocation);
     }
 
-    void relocate(CompilationUnit compilationUnit) {
+    boolean relocate(CompilationUnit compilationUnit) {
+        boolean[] modified = new boolean[1];
         String classSimpleName = compilationUnit.getPrimaryTypeName().orElse("");
         compilationUnit.accept(new GenericVisitorAdapter<Object, Object>() {
             @Override public Object visit(PackageDeclaration n, Object arg) {
-                replacePackage(n, classSimpleName);
+                replacePackage(n, classSimpleName, modified);
                 return super.visit(n, arg);
             }
 
             @Override public Object visit(CompilationUnit n, Object arg) {
                 for (ImportDeclaration importDeclaration : compilationUnit.getImports()) {
-                    replacePackage(importDeclaration, classSimpleName);
+                    replacePackage(importDeclaration, classSimpleName, modified);
                 }
                 return super.visit(n, arg);
             }
 
             @Override public Object visit(VariableDeclarator n, Object arg) {
-                replacePackage((NodeWithType) n, classSimpleName);
+                replacePackage((NodeWithType) n, classSimpleName, modified);
                 return super.visit(n, arg);
             }
 
             @Override public Object visit(NameExpr n, Object arg) {
-                replacePackage(n, classSimpleName);
+                replacePackage(n, classSimpleName, modified);
                 return super.visit(n, arg);
             }
 
             @Override public Object visit(ClassOrInterfaceType n, Object arg) {
-                replacePackage(n, classSimpleName);
+                replacePackage(n, classSimpleName, modified);
                 return super.visit(n, arg);
             }
 
         }, null);
+        return modified[0];
     }
 
-    private void replacePackage(NodeWithType node, String classSimpleName) {
-        replacePackage(node.getType().toString(), node::setType, classSimpleName);
+    private void replacePackage(NodeWithType node, String classSimpleName, boolean[] modified) {
+        replacePackage(node.getType().toString(), node::setType, classSimpleName, modified);
     }
 
-    private void replacePackage(NodeWithName node, String classSimpleName) {
-        replacePackage(node.getName().toString(), node::setName, classSimpleName);
+    private void replacePackage(NodeWithName node, String classSimpleName, boolean[] modified) {
+        replacePackage(node.getName().toString(), node::setName, classSimpleName, modified);
     }
 
-    private void replacePackage(NodeWithSimpleName node, String classSimpleName) {
-        replacePackage(node.getName().toString(), node::setName, classSimpleName);
+    private void replacePackage(NodeWithSimpleName node, String classSimpleName, boolean[] modified) {
+        replacePackage(node.getName().toString(), node::setName, classSimpleName, modified);
     }
 
-    private void replacePackage(String name, Consumer<String> nameSetter, String classSimpleName) {
+    private void replacePackage(String name, Consumer<String> nameSetter, String classSimpleName, boolean[] modified) {
         for (Relocation relocation : relocations) {
             if (doesNotRelocateClass(relocation, classSimpleName)) {
                 continue;
@@ -76,11 +78,12 @@ class FileRelocator {
 
             if (name.equals(relocation.getSourcePackage())) {
                 nameSetter.accept(relocation.getTargetPackage());
+                modified[0] = true;
                 break;
             }
             if (name.startsWith(relocation.getSourcePackage() + '.')) {
-                nameSetter
-                    .accept(name.replace(relocation.getSourcePackage(), relocation.getTargetPackage()));
+                nameSetter.accept(name.replace(relocation.getSourcePackage(), relocation.getTargetPackage()));
+                modified[0] = true;
                 break;
             }
         }
