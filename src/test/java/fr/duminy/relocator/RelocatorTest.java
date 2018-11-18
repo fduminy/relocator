@@ -38,24 +38,25 @@ class RelocatorTest {
         Path sourceDirectory = createTempDirectory("");
         Path file1 = createClassFile(sourceDirectory, "Class1");
         Path file2 = createClassFile(sourceDirectory, "Class2");
-        Path targetDirectory = createTempDirectory("");
         when(fileCollector.collectFiles(sourceDirectory)).thenReturn(asList(file1, file2));
         Relocator relocator = new Relocator(sourceDirectory, fileRelocator, fileCollector);
         relocator.addRelocation(relocation);
 
-        relocator.relocate(targetDirectory);
+        relocator.relocate();
 
         verify(fileRelocator).addRelocation(relocation);
         verify(fileRelocator).relocate(argThat(eqCompilationUnitFor(file1)));
         verify(fileRelocator).relocate(argThat(eqCompilationUnitFor(file2)));
         verifyNoMoreInteractions(fileRelocator, fileCollector, relocation);
-        Path targetPackage = targetDirectory.resolve("package1");
+        Path targetPackage = sourceDirectory.resolve("package1");
         assertThat(targetPackage.resolve(file1.getFileName().toString())).hasSameContentAs(file1);
         assertThat(targetPackage.resolve(file2.getFileName().toString())).hasSameContentAs(file2);
     }
 
     private Path createClassFile(Path sourceDirectory, String className) throws IOException {
-        Path file = createFile(sourceDirectory.resolve(className + ".java"));
+        Path packageDirectory = sourceDirectory.resolve("package1");
+        createDirectories(packageDirectory);
+        Path file = createFile(packageDirectory.resolve(className + ".java"));
         write(file, ("package package1;\n\npublic class " + className + " {\n}").getBytes());
         return file;
     }

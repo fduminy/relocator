@@ -14,7 +14,7 @@ import static java.nio.file.Files.newBufferedWriter;
 import static java.nio.file.Paths.get;
 import static java.nio.file.StandardOpenOption.CREATE;
 
-@SuppressWarnings("unused")
+@SuppressWarnings({ "unused", "WeakerAccess" })
 public class Relocator {
     private final Path sourceDirectory;
     private final FileRelocator fileRelocator;
@@ -34,14 +34,13 @@ public class Relocator {
         fileRelocator.addRelocation(relocation);
     }
 
-    public void relocate(Path targetDirectory) throws IOException {
-        createDirectories(targetDirectory);
+    public void relocate() throws IOException {
         fileCollector.collectFiles(sourceDirectory).forEach(file -> {
             try {
                 String fileName = file.getFileName().toString();
                 CompilationUnit compilationUnit = parse(file);
                 relocate(compilationUnit, fileName);
-                generateFile(compilationUnit, targetDirectory, fileName);
+                generateFile(compilationUnit, fileName);
             } catch (IOException e) {
                 throw new RelocatorException(e);
             }
@@ -53,7 +52,7 @@ public class Relocator {
         fileRelocator.relocate(compilationUnit);
     }
 
-    private void generateFile(CompilationUnit compilationUnit, Path targetDirectory, String fileName)
+    private void generateFile(CompilationUnit compilationUnit, String fileName)
         throws IOException {
         Optional<PackageDeclaration> packageDeclaration = compilationUnit.getPackageDeclaration();
         if (!packageDeclaration.isPresent()) {
@@ -61,9 +60,9 @@ public class Relocator {
         }
         String packageName = packageDeclaration.get().getNameAsString().replace(".", "/");
 
-        Path parentOutput = targetDirectory.resolve(get(packageName));
-        createDirectories(parentOutput);
-        Path output = parentOutput.resolve(fileName);
+        Path packageDirectory = sourceDirectory.resolve(get(packageName));
+        createDirectories(packageDirectory);
+        Path output = packageDirectory.resolve(fileName);
         try (Writer writer = newBufferedWriter(output, CREATE)) {
             writer.write(compilationUnit.toString());
         }
