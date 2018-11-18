@@ -1,9 +1,9 @@
 package fr.duminy.relocator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -17,174 +17,197 @@ import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.joining;
 import static org.assertj.core.api.Assertions.assertThat;
 
+
 class FileRelocatorTest {
     private static final Function<String, String> PACKAGE1_TO_PACKAGE2 = source -> source
         .replace("package1", "package2");
-    private static final PackageRelocation PACKAGE1_TO_PACKAGE2_RELOCATION = new PackageRelocation("package1",
-                                                                                                   "package2");
-    private static final ClassRelocation CLASS1_TO_PACKAGE2_RELOCATION = new ClassRelocation("package1", "Class1",
-                                                                                             "package2");
+    private static final Function<String, String> IDENTITY = identity();
 
     private final FileRelocator fileRelocator = new FileRelocator();
 
-    @Test
-    void relocate_package_class2() throws Exception {
-        fileRelocator.addRelocation(CLASS1_TO_PACKAGE2_RELOCATION);
-        relocate("package package1;\n\n"
-                 + "public class Class2 {\n"
-                 + "}\n", identity());
+    @Nested class ClassRelocation_ {
+        private final ClassRelocation CLASS1_TO_PACKAGE2 = new ClassRelocation("package1", "Class1", "package2");
+
+        @Nested class Package {
+            @DisplayName("relocates class1")
+            @Test void class1() throws Exception {
+                relocate(CLASS1_TO_PACKAGE2, "package package1;\n\n"
+                                             + "public class Class1 {\n"
+                                             + "}\n", PACKAGE1_TO_PACKAGE2);
+            }
+
+            @DisplayName("doesn't modify class2")
+            @Test void class2() throws Exception {
+                relocate(CLASS1_TO_PACKAGE2, "package package1;\n\n"
+                                             + "public class Class2 {\n"
+                                             + "}\n", IDENTITY);
+            }
+
+            @DisplayName("doesn't modify class1 from package with longer name")
+            @Test void package_with_longer_name() throws Exception {
+                relocate(CLASS1_TO_PACKAGE2, "package package1A;\n\n"
+                                             + "public class Class1 {\n"
+                                             + "}\n", IDENTITY);
+            }
+        }
+
+        @Nested class Import {
+            @DisplayName("doesn't modify class2 import")
+            @Test void class2() throws Exception {
+                relocate(CLASS1_TO_PACKAGE2, "package userpackage;\n\n"
+                                             + "import package1.Class2;\n\n"
+                                             + "public class Class2User {\n\n"
+                                             + "    private Class2 class2;\n"
+                                             + "}\n", IDENTITY);
+            }
+        }
+
+        @Nested class ClassReference {
+            @DisplayName("doesn't modify class2 reference")
+            @Test void class2() throws Exception {
+                relocate(CLASS1_TO_PACKAGE2, "package userpackage;\n\n"
+                                             + "public class Class2User {\n\n"
+                                             + "    private package1.Class2 class1 = new package1.Class2();\n"
+                                             + "}\n", IDENTITY);
+            }
+        }
+
+        @Nested class StaticImport {
+            @DisplayName("doesn't modify static import from class2")
+            @Test void class2() throws Exception {
+                relocate(CLASS1_TO_PACKAGE2, "package userpackage;\n\n"
+                                             + "import static package1.Class2.staticMethod;\n\n"
+                                             + "public class Class2User {\n\n"
+                                             + "    public void user() throws Exception {\n"
+                                             + "        staticMethod();\n"
+                                             + "    }\n"
+                                             + "}\n", IDENTITY);
+            }
+        }
+
+        @Nested class StaticMethodReference {
+            @DisplayName("doesn't modify static method reference to class2")
+            @Test void class2() throws Exception {
+                relocate(CLASS1_TO_PACKAGE2, "package userpackage;\n\n"
+                                             + "public class Class2User {\n\n"
+                                             + "    public void user() {\n"
+                                             + "        package1.Class2.staticMethod();\n"
+                                             + "    }\n"
+                                             + "}\n", IDENTITY);
+            }
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = { "true", "false" })
-    void relocate_package(boolean packageRelocation) throws Exception {
-        fileRelocator
-            .addRelocation(packageRelocation ? PACKAGE1_TO_PACKAGE2_RELOCATION : CLASS1_TO_PACKAGE2_RELOCATION);
-        relocate("package package1;\n\n"
-                 + "public class Class1 {\n"
-                 + "}\n", PACKAGE1_TO_PACKAGE2);
+    @Nested class PackageRelocation_ {
+        private final PackageRelocation PACKAGE1_TO_PACKAGE2_ = new PackageRelocation("package1", "package2");
+
+        @Nested class Package {
+            @DisplayName("relocates package1")
+            @Test void package1() throws Exception {
+                relocate(PACKAGE1_TO_PACKAGE2_, "package package1;\n\n"
+                                                + "public class Class1 {\n"
+                                                + "}\n", PACKAGE1_TO_PACKAGE2);
+            }
+
+            @DisplayName("doesn't modify package with longer name")
+            @Test void package_with_longer_name() throws Exception {
+                relocate(PACKAGE1_TO_PACKAGE2_, "package package1A;\n\n"
+                                                + "public class Class1 {\n"
+                                                + "}\n", IDENTITY);
+            }
+        }
+
+        @Nested class Import {
+            @DisplayName("modify class1 import")
+            @Test void class1() throws Exception {
+                relocate(PACKAGE1_TO_PACKAGE2_, "package userpackage;\n\n"
+                                                + "import package1.Class1;\n\n"
+                                                + "public class Class1User {\n\n"
+                                                + "    private Class1 class1;\n"
+                                                + "}\n", PACKAGE1_TO_PACKAGE2);
+            }
+
+            @DisplayName("doesn't modify class1 import from package with longer name")
+            @Test void package_with_longer_name() throws Exception {
+                relocate(PACKAGE1_TO_PACKAGE2_, "package userpackage;\n\n"
+                                                + "import package1A.Class1;\n\n"
+                                                + "public class Class1User {\n\n"
+                                                + "    private Class1 class1;\n"
+                                                + "}\n", IDENTITY);
+            }
+        }
+
+        @Nested class ClassReference {
+            @DisplayName("modify class1 reference")
+            @Test void class1() throws Exception {
+                relocate(PACKAGE1_TO_PACKAGE2_, "package userpackage;\n\n"
+                                                + "public class Class1User {\n\n"
+                                                + "    private package1.Class1 class1 = new package1.Class1();\n"
+                                                + "}\n", PACKAGE1_TO_PACKAGE2);
+            }
+
+            @DisplayName("doesn't modify class1 reference from package with longer name")
+            @Test void package_with_longer_name() throws Exception {
+                relocate(PACKAGE1_TO_PACKAGE2_, "package userpackage;\n\n"
+                                                + "public class Class1User {\n\n"
+                                                + "    private package1A.Class1 class1 = new package1A.Class1();\n"
+                                                + "}\n", IDENTITY);
+            }
+        }
+
+        @Nested class StaticImport {
+            @DisplayName("modify class1 reference")
+            @Test void class1() throws Exception {
+                relocate(PACKAGE1_TO_PACKAGE2_, "package userpackage;\n\n"
+                                                + "import static package1.Class1.staticMethod;\n\n"
+                                                + "public class Class1User {\n\n"
+                                                + "    public void user() throws Exception {\n"
+                                                + "        staticMethod();\n"
+                                                + "    }\n"
+                                                + "}\n", PACKAGE1_TO_PACKAGE2);
+            }
+
+            @DisplayName("doesn't modify static import from class1 and package with longer name")
+            @Test void package_with_longer_name() throws Exception {
+                relocate(PACKAGE1_TO_PACKAGE2_, "package userpackage;\n\n"
+                                                + "import static package1A.Class1.staticMethod;\n\n"
+                                                + "public class Class1User {\n\n"
+                                                + "    public void user() throws Exception {\n"
+                                                + "        staticMethod();\n"
+                                                + "    }\n"
+                                                + "}\n", IDENTITY);
+            }
+        }
+
+        @Nested class StaticMethodReference {
+            @DisplayName("modify static method reference to class1")
+            @Test void class1() throws Exception {
+                relocate(PACKAGE1_TO_PACKAGE2_, "package userpackage;\n\n"
+                                                + "public class Class1User {\n\n"
+                                                + "    public void user() {\n"
+                                                + "        package1.Class1.staticMethod();\n"
+                                                + "    }\n"
+                                                + "}\n", PACKAGE1_TO_PACKAGE2);
+            }
+
+            @DisplayName("doesn't modify static method reference from package with longer name")
+            @Test void package_with_longer_name() throws Exception {
+                relocate(PACKAGE1_TO_PACKAGE2_, "package userpackage;\n\n"
+                                                + "public class Class1User {\n\n"
+                                                + "    public void user() {\n"
+                                                + "        package1A.Class1.staticMethod();\n"
+                                                + "    }\n"
+                                                + "}\n", IDENTITY);
+            }
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = { "true", "false" })
-    void relocate_package_longerName(boolean packageRelocation) throws Exception {
-        fileRelocator
-            .addRelocation(packageRelocation ? PACKAGE1_TO_PACKAGE2_RELOCATION : CLASS1_TO_PACKAGE2_RELOCATION);
-        relocate("package package1A;\n\n"
-                 + "public class Class1 {\n"
-                 + "}\n", identity());
-    }
-
-    @Test
-    void relocate_import_class2() throws Exception {
-        fileRelocator.addRelocation(CLASS1_TO_PACKAGE2_RELOCATION);
-        relocate("package userpackage;\n\n"
-                 + "import package1.Class2;\n\n"
-                 + "public class Class2User {\n\n"
-                 + "    private Class12 class2;\n"
-                 + "}\n", identity());
-    }
-
-    @Test
-    void relocate_import() throws Exception {
-        fileRelocator.addRelocation(PACKAGE1_TO_PACKAGE2_RELOCATION);
-        relocate("package userpackage;\n\n"
-                 + "import package1.Class1;\n\n"
-                 + "public class Class1User {\n\n"
-                 + "    private Class1 class1;\n"
-                 + "}\n", PACKAGE1_TO_PACKAGE2);
-    }
-
-    @Test
-    void relocate_import_longerName() throws Exception {
-        fileRelocator.addRelocation(PACKAGE1_TO_PACKAGE2_RELOCATION);
-        relocate("package userpackage;\n\n"
-                 + "import package1A.Class1;\n\n"
-                 + "public class Class1User {\n\n"
-                 + "    private Class1 class1;\n"
-                 + "}\n", identity());
-    }
-
-    @Test
-    void relocate_class_reference_class2() throws Exception {
-        fileRelocator.addRelocation(CLASS1_TO_PACKAGE2_RELOCATION);
-        relocate("package userpackage;\n\n"
-                 + "public class Class2User {\n\n"
-                 + "    private package1.Class2 class1 = new package1.Class2();\n"
-                 + "}\n", identity());
-    }
-
-    @Test
-    void relocate_class_reference() throws Exception {
-        fileRelocator.addRelocation(PACKAGE1_TO_PACKAGE2_RELOCATION);
-        relocate("package userpackage;\n\n"
-                 + "public class Class1User {\n\n"
-                 + "    private package1.Class1 class1 = new package1.Class1();\n"
-                 + "}\n", PACKAGE1_TO_PACKAGE2);
-    }
-
-    @Test
-    void relocate_class_reference_longerName() throws Exception {
-        fileRelocator.addRelocation(PACKAGE1_TO_PACKAGE2_RELOCATION);
-        relocate("package userpackage;\n\n"
-                 + "public class Class1User {\n\n"
-                 + "    private package1A.Class1 class1 = new package1A.Class1();\n"
-                 + "}\n", identity());
-    }
-
-    @Test
-    void relocate_static_import_class2() throws Exception {
-        fileRelocator.addRelocation(CLASS1_TO_PACKAGE2_RELOCATION);
-        relocate("package userpackage;\n\n"
-                 + "import static package1.Class2.staticMethod;\n\n"
-                 + "public class Class2User {\n\n"
-                 + "    public void user() throws Exception {\n"
-                 + "        staticMethod();\n"
-                 + "    }\n"
-                 + "}\n", identity());
-    }
-
-    @Test
-    void relocate_static_import() throws Exception {
-        fileRelocator.addRelocation(PACKAGE1_TO_PACKAGE2_RELOCATION);
-        relocate("package userpackage;\n\n"
-                 + "import static package1.Class1.staticMethod;\n\n"
-                 + "public class Class1User {\n\n"
-                 + "    public void user() throws Exception {\n"
-                 + "        staticMethod();\n"
-                 + "    }\n"
-                 + "}\n", PACKAGE1_TO_PACKAGE2);
-    }
-
-    @Test
-    void relocate_static_import_longerName() throws Exception {
-        fileRelocator.addRelocation(PACKAGE1_TO_PACKAGE2_RELOCATION);
-        relocate("package userpackage;\n\n"
-                 + "import static package1A.Class1.staticMethod;\n\n"
-                 + "public class Class1User {\n\n"
-                 + "    public void user() throws Exception {\n"
-                 + "        staticMethod();\n"
-                 + "    }\n"
-                 + "}\n", identity());
-    }
-
-    @Test
-    void relocate_static_method_reference_class2() throws Exception {
-        fileRelocator.addRelocation(CLASS1_TO_PACKAGE2_RELOCATION);
-        relocate("package userpackage;\n\n"
-                 + "public class Class2User {\n\n"
-                 + "    public void user() {\n"
-                 + "        package1.Class2.staticMethod();\n"
-                 + "    }\n"
-                 + "}\n", identity());
-    }
-
-    @Test
-    void relocate_static_method_reference() throws Exception {
-        fileRelocator.addRelocation(PACKAGE1_TO_PACKAGE2_RELOCATION);
-        relocate("package userpackage;\n\n"
-                 + "public class Class1User {\n\n"
-                 + "    public void user() {\n"
-                 + "        package1.Class1.staticMethod();\n"
-                 + "    }\n"
-                 + "}\n", PACKAGE1_TO_PACKAGE2);
-    }
-
-    @Test
-    void relocate_static_method_reference_longerName() throws Exception {
-        fileRelocator.addRelocation(PACKAGE1_TO_PACKAGE2_RELOCATION);
-        relocate("package userpackage;\n\n"
-                 + "public class Class1User {\n\n"
-                 + "    public void user() {\n"
-                 + "        package1A.Class1.staticMethod();\n"
-                 + "    }\n"
-                 + "}\n", identity());
-    }
-
-    private void relocate(String source, Function<String, String> expectedResult) throws IOException {
+    private void relocate(Relocation relocation, String source, Function<String, String> expectedResult)
+        throws IOException {
+        fileRelocator.addRelocation(relocation);
         relocate(source, expectedResult.apply(source));
     }
-
+    
     private void relocate(String source, String expectedResult) throws IOException {
         CompilationUnit compilationUnit = parse(writeFile(source));
         fileRelocator.relocate(compilationUnit);
